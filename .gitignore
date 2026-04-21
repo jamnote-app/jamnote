@@ -205,3 +205,26 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# rclone credentials — never commit these
+.rclone.conf
+rclone.conf
+**/rclone.conf
+
+# Google Drive auth tokens
+**/*.token
+**/token.json
+gdrive-token.json
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+
+# System
+.DS_Store
+Thumbs.db
+
+# JamNote device config
+config/device.json
+config/wifi-credentials.json
