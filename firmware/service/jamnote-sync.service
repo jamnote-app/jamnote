@@ -1,0 +1,19 @@
+[Unit]
+Description=JamNote Sync Watcher
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/jamnote/firmware/sync
+Environment=PYTHONPATH=/home/pi/jamnote/firmware
+ExecStart=/home/pi/jamnote-env/bin/python sync_manager.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jamnote-sync
+
+[Install]
+WantedBy=multi-user.target
