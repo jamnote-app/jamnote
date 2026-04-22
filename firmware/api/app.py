@@ -122,14 +122,35 @@ def status():
 # Recording
 # ─────────────────────────────────────────────
 
+@app.route('/api/record/mode', methods=['GET'])
+def get_mode():
+    return jsonify({'mode': recorder.current_mode})
+
+
+@app.route('/api/record/mode', methods=['POST'])
+def set_mode():
+    data = request.get_json()
+    mode = data.get('mode') if data else None
+    if mode not in ('stereo', 'guitar_only'):
+        return jsonify({'error': 'mode must be stereo or guitar_only'}), 400
+    try:
+        recorder.set_mode(mode)
+        return jsonify({'mode': recorder.current_mode})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
 @app.route('/api/record/start', methods=['POST'])
 def record_start():
     if recorder.is_recording:
         return jsonify({'error': 'Already recording', 'session': recorder.current_session}), 409
 
-    session_id = recorder.start()
-    logger.info(f'Recording started via API — session {session_id}')
-    return jsonify({'status': 'recording', 'session': session_id})
+    data = request.get_json(silent=True)
+    mode = data.get('mode') if data else None
+
+    session_id = recorder.start(mode=mode)
+    logger.info(f'Recording started via API — session {session_id} — mode: {recorder.current_mode}')
+    return jsonify({'status': 'recording', 'session': session_id, 'mode': recorder.current_mode})
 
 
 @app.route('/api/record/stop', methods=['POST'])
@@ -149,8 +170,10 @@ def record_toggle():
         session_id = recorder.stop()
         return jsonify({'status': 'stopped', 'session': session_id})
     else:
-        session_id = recorder.start()
-        return jsonify({'status': 'recording', 'session': session_id})
+        data = request.get_json(silent=True)
+        mode = data.get('mode') if data else None
+        session_id = recorder.start(mode=mode)
+        return jsonify({'status': 'recording', 'session': session_id, 'mode': recorder.current_mode})
 
 
 # ─────────────────────────────────────────────
