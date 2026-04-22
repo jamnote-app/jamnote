@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0F6E56">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="JamNote">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/src/styles.css">
+  <title>JamNote</title>
+</head>
+<body>
+
+  <div id="app">
+
+    <!-- Navigation bar -->
+    <nav id="nav-bar">
+      <div id="nav-title">JamNote</div>
+      <div id="nav-status">
+        <span id="status-wifi" class="status-dot" title="WiFi"></span>
+        <span id="status-sd" class="status-label" title="SD card">SD</span>
+      </div>
+    </nav>
+
+    <!-- Screen container -->
+    <main id="screen-container">
+
+      <!-- Record screen -->
+      <section id="screen-record" class="screen active">
+        <div class="screen-inner">
+
+          <div class="input-cards">
+            <div class="input-card">
+              <div class="input-card-header">
+                <span class="input-label">Guitar</span>
+                <span class="input-badge">¼ in</span>
+              </div>
+              <div class="meter-track">
+                <div id="meter-guitar" class="meter-fill"></div>
+              </div>
+            </div>
+            <div class="input-card">
+              <div class="input-card-header">
+                <span class="input-label">Vocal</span>
+                <span class="input-badge">XLR</span>
+              </div>
+              <div class="meter-track">
+                <div id="meter-vocal" class="meter-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="record-section">
+            <div id="record-hint">tap to record</div>
+            <button id="record-btn" aria-label="Start or stop recording">
+              <div id="record-btn-inner"></div>
+            </button>
+            <div id="record-timer">00:00</div>
+          </div>
+
+          <div id="last-capture-section" class="hidden">
+            <div class="section-label">Last capture</div>
+            <div id="last-capture-card" class="capture-card">
+              <button class="play-btn" id="last-play-btn" aria-label="Play last capture">
+                <svg width="10" height="12" viewBox="0 0 10 12"><path d="M1 1l8 5-8 5V1z" fill="currentColor"/></svg>
+              </button>
+              <div class="capture-wave" id="last-waveform"></div>
+              <div class="capture-meta">
+                <div id="last-time" class="capture-time"></div>
+                <span id="last-sync-badge" class="sync-badge"></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Library screen -->
+      <section id="screen-library" class="screen">
+        <div class="screen-inner">
+          <div class="section-label">Captures</div>
+          <div id="library-list">
+            <div id="library-empty" class="empty-state">No captures yet</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings screen -->
+      <section id="screen-settings" class="screen">
+        <div class="screen-inner">
+
+          <div class="section-label">Cloud storage</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row-label">Google Drive</span>
+              <span id="gdrive-status" class="sync-badge synced">connected</span>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <span class="settings-row-label">Upload folder</span>
+              <span class="settings-row-value" id="upload-path">/recordings</span>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <span class="settings-row-label">Auto-sync</span>
+              <label class="toggle">
+                <input type="checkbox" id="auto-sync-toggle" checked>
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="section-label">Network</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row-label">WiFi network</span>
+              <span class="settings-row-value" id="wifi-ssid">—</span>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <span class="settings-row-label">Add network</span>
+              <button class="text-btn" id="add-wifi-btn">Configure →</button>
+            </div>
+          </div>
+
+          <div class="section-label">Audio</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row-label">Sample rate</span>
+              <span class="settings-row-value">44.1 kHz</span>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <span class="settings-row-label">Bit depth</span>
+              <span class="settings-row-value">24-bit</span>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <span class="settings-row-label">Format</span>
+              <span class="settings-row-value">WAV</span>
+            </div>
+          </div>
+
+          <div class="section-label">Device</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <span class="settings-row-label">Device name</span>
+              <span class="settings-row-value" id="device-name">jamnote.local</span>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <span class="settings-row-label">SD card</span>
+              <span class="settings-row-value" id="sd-usage">—</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Tab bar -->
+    <nav id="tab-bar">
+      <button class="tab active" data-screen="record" aria-label="Record">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="8"/>
+          <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Record</span>
+      </button>
+      <button class="tab" data-screen="library" aria-label="Library">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <line x1="4" y1="7" x2="20" y2="7"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="17" x2="14" y2="17"/>
+        </svg>
+        <span>Library</span>
+      </button>
+      <button class="tab" data-screen="settings" aria-label="Settings">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="3"/>
+          <circle cx="12" cy="12" r="9"/>
+        </svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- Sync review modal -->
+  <div id="sync-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-sheet">
+      <div id="sync-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- WiFi config modal -->
+  <div id="wifi-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>Add WiFi network</h2>
+        <button class="modal-close" id="wifi-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label">Network name (SSID)</label>
+        <input type="text" id="wifi-ssid-input" class="field-input" placeholder="Your network name" autocomplete="off">
+        <label class="field-label">Password</label>
+        <input type="password" id="wifi-password-input" class="field-input" placeholder="Password">
+        <button class="btn btn-primary" id="wifi-save-btn">Save network</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/src/api.js"></script>
+  <script src="/src/recorder.js"></script>
+  <script src="/src/library.js"></script>
+  <script src="/src/settings.js"></script>
+  <script src="/src/sync.js"></script>
+  <script src="/src/app.js"></script>
+
+</body>
+</html>

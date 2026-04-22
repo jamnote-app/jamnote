@@ -1,0 +1,243 @@
+"""
+JamNote — Sync Manager
+Handles uploading captures to Google Drive via rclone.
+Manages sync queue, status tracking, and metadata updates.
+"""
+
+import json
+import subprocess
+import logging
+from pathlib import Path
+from datetime import datetime
+
+logging.basicConfig(level=logging.INFO, format='[JamNote Sync] %(message)s')
+logger = logging.getLogger(__name__)
+
+CONFIG_PATH = Path('/home/pi/jamnote/config/device.json')
+METADATA_PATH = Path('/home/pi/jamnote/config/metadata.json')
+RECORDINGS_DIR = Path('/home/pi/recordings')
+SYNC_QUEUE_PATH = Path('/home/pi/jamnote/config/sync_queue.json')
+
+
+def load_config():
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH) as f:
+            return json.load(f)
+    return {'rclone_remote': 'gdrive', 'upload_path': '/recordings'}
+
+
+def load_metadata():
+    if METADATA_PATH.exists():
+        with open(METADATA_PATH) as f:
+            return json.load(f)
+    return {}
+
+
+def save_metadata(data):
+    with open(METADATA_PATH, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def load_queue():
+    """Load persisted sync queue — survives reboots."""
+    if SYNC_QUEUE_PATH.exists():
+        with open(SYNC_QUEUE_PATH) as f:
+            return json.load(f)
+    return []
+
+
+def save_queue(queue):
+    SYNC_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(SYNC_QUEUE_PATH, 'w') as f:
+        json.dump(queue, f, indent=2)
+
+
+def add_to_queue(session_id):
+    """Add a session to the sync queue if not already present."""
+    queue = load_queue()
+    if session_id not in queue:
+        queue.append(session_id)
+        save_queue(queue)
+        logger.info(f'Added {session_id} to sync queue')
+
+
+def remove_from_queue(session_id):
+    queue = load_queue()
+    if session_id in queue:
+        queue.remove(session_id)
+        save_queue(queue)
+
+
+def wifi_available():
+    """Check if internet is reachable."""
+    try:
+        result = subprocess.run(
+            ['ping', '-c', '1', '-W', '3', '8.8.8.8'],
+            capture_output=True, timeout=5
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def rclone_upload(local_path, remote_path):
+    """
+    Upload a single file to Google Drive via rclone.
+    Returns True on success, False on failure.
+    """
+    config = load_config()
+    remote = config.get('rclone_remote', 'gdrive')
+
+    destination = f'{remote}:{remote_path}'
+
+    try:
+        result = subprocess.run(
+            ['rclone', 'copy', str(local_path), destination,
+             '--progress', '--stats-one-line'],
+            capture_output=True, text=True, timeout=120
+        )
+
+        if result.returncode == 0:
+            logger.info(f'Uploaded {local_path.name} → {destination}')
+            return True
+        else:
+            logger.error(f'rclone error: {result.stderr}')
+            return False
+
+    except subprocess.TimeoutExpired:
+        logger.error(f'Upload timed out: {local_path.name}')
+        return False
+    except FileNotFoundError:
+        logger.error('rclone not found — is it installed?')
+        return False
+
+
+def sync_session(session_id):
+    """
+    Upload guitar and vocal files for a single session.
+    Uses custom_name if set, otherwise uses the timestamp.
+    Updates metadata with sync status.
+    """
+    metadata = load_metadata()
+    config = load_config()
+
+    session_meta = metadata.get(session_id, {})
+    custom_name = session_meta.get('custom_name')
+    upload_path = session_meta.get('upload_path') or config.get('upload_path', '/recordings')
+
+    guitar_file = RECORDINGS_DIR / f'{session_id}-guitar.wav'
+    vocal_file = RECORDINGS_DIR / f'{session_id}-vocal.wav'
+
+    if not guitar_file.exists():
+        logger.error(f'Guitar file not found for session {session_id}')
+        return {'status': 'error', 'message': 'Guitar file not found'}
+
+    results = {}
+
+    # Determine upload filename
+    base_name = custom_name if custom_name else session_id
+
+    # Upload guitar track
+    guitar_remote = f'{upload_path}/{base_name}-guitar.wav'
+    results['guitar'] = rclone_upload(guitar_file, guitar_remote)
+
+    # Upload vocal track if it exists
+    if vocal_file.exists():
+        vocal_remote = f'{upload_path}/{base_name}-vocal.wav'
+        results['vocal'] = rclone_upload(vocal_file, vocal_remote)
+    else:
+        results['vocal'] = None
+
+    # Update metadata
+    if session_id not in metadata:
+        metadata[session_id] = {}
+
+    all_success = results['guitar'] and (results['vocal'] is not False)
+
+    metadata[session_id]['synced'] = all_success
+    metadata[session_id]['sync_attempted'] = datetime.now().isoformat()
+    metadata[session_id]['sync_results'] = results
+
+    if all_success:
+        metadata[session_id]['synced_name'] = base_name
+        remove_from_queue(session_id)
+        logger.info(f'Session {session_id} synced successfully as {base_name}')
+    else:
+        logger.warning(f'Session {session_id} sync partially failed: {results}')
+
+    save_metadata(metadata)
+
+    return {
+        'status': 'synced' if all_success else 'partial',
+        'session': session_id,
+        'results': results,
+        'upload_name': base_name,
+    }
+
+
+def sync_all_unsynced():
+    """
+    Sync all sessions not yet uploaded to Google Drive.
+    Called automatically when WiFi becomes available.
+    Returns summary of sync results.
+    """
+    if not wifi_available():
+        logger.info('No WiFi — sync deferred')
+        return {'status': 'deferred', 'reason': 'no_wifi'}
+
+    metadata = load_metadata()
+
+    # Find all sessions with guitar files that haven't been synced
+    guitar_files = list(RECORDINGS_DIR.glob('*-guitar.wav'))
+    unsynced = []
+
+    for gf in guitar_files:
+        session_id = gf.stem.replace('-guitar', '')
+        session_meta = metadata.get(session_id, {})
+        if not session_meta.get('synced', False):
+            unsynced.append(session_id)
+
+    if not unsynced:
+        logger.info('All sessions already synced')
+        return {'status': 'complete', 'synced': 0, 'already_synced': True}
+
+    logger.info(f'Syncing {len(unsynced)} unsynced session(s)')
+
+    results = []
+    for session_id in sorted(unsynced):
+        result = sync_session(session_id)
+        results.append(result)
+
+    synced_count = sum(1 for r in results if r['status'] == 'synced')
+
+    return {
+        'status': 'complete',
+        'synced': synced_count,
+        'failed': len(results) - synced_count,
+        'results': results,
+    }
+
+
+def watch_for_wifi():
+    """
+    Background loop that watches for WiFi connectivity
+    and triggers sync when a connection is detected.
+    Runs as a systemd service.
+    """
+    import time
+    was_connected = False
+    logger.info('Sync watcher started')
+
+    while True:
+        connected = wifi_available()
+
+        if connected and not was_connected:
+            logger.info('WiFi connected — triggering sync')
+            sync_all_unsynced()
+
+        was_connected = connected
+        time.sleep(30)
+
+
+if __name__ == '__main__':
+    watch_for_wifi()
