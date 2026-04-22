@@ -224,6 +224,16 @@ def delete_recording(session_id):
     return jsonify({'status': 'deleted', 'files': deleted})
 
 
+@app.route('/api/recordings/<session_id>/audio')
+def stream_audio(session_id):
+    """Stream the guitar WAV file for in-browser playback."""
+    from flask import send_file
+    guitar_file = Path(recorder.recordings_dir) / f'{session_id}-guitar.wav'
+    if not guitar_file.exists():
+        abort(404)
+    return send_file(str(guitar_file), mimetype='audio/wav')
+
+
 @app.route('/api/recordings/<session_id>/sync', methods=['POST'])
 def sync_recording(session_id):
     """Trigger sync for a specific session."""
