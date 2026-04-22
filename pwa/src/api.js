@@ -39,9 +39,11 @@ const API = {
   status: () => API.get('/api/status'),
 
   // Recording
-  recordStart: () => API.post('/api/record/start'),
+  recordStart: (mode) => API.post('/api/record/start', mode ? { mode } : undefined),
   recordStop:  () => API.post('/api/record/stop'),
-  recordToggle: () => API.post('/api/record/toggle'),
+  recordToggle: (mode) => API.post('/api/record/toggle', mode ? { mode } : undefined),
+  getMode: () => API.get('/api/record/mode'),
+  setMode: (mode) => API.post('/api/record/mode', { mode }),
 
   // Library
   recordings: () => API.get('/api/recordings'),
