@@ -1,6 +1,6 @@
 // JamNote Recorder Module
 // Manages record button UI, timer, Bluetooth shutter trigger,
-// level meters, and last capture preview
+// level meters, last capture preview, and input mode toggle
 
 const Recorder = (() => {
 
@@ -9,17 +9,39 @@ const Recorder = (() => {
   let timerSeconds = 0;
   let currentSession = null;
   let meterInterval = null;
+  let currentMode = 'stereo'; // 'stereo' or 'guitar_only'
 
   const btn = () => document.getElementById('record-btn');
   const timer = () => document.getElementById('record-timer');
   const hint = () => document.getElementById('record-hint');
   const meterGuitar = () => document.getElementById('meter-guitar');
   const meterVocal = () => document.getElementById('meter-vocal');
+  const modeToggle = () => document.getElementById('mode-toggle');
+  const modeLabel = () => document.getElementById('mode-label');
+  const vocalCard = () => document.getElementById('vocal-input-card');
 
   function formatTime(s) {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
     const sec = (s % 60).toString().padStart(2, '0');
     return `${m}:${sec}`;
+  }
+
+  function updateModeUI() {
+    const isGuitarOnly = currentMode === 'guitar_only';
+    if (modeLabel()) modeLabel().textContent = isGuitarOnly ? 'Guitar only' : 'Guitar + vocal';
+    if (modeToggle()) modeToggle().checked = !isGuitarOnly;
+    if (vocalCard()) vocalCard().style.opacity = isGuitarOnly ? '0.35' : '1';
+  }
+
+  async function setMode(mode) {
+    if (recording) return;
+    currentMode = mode;
+    updateModeUI();
+    try {
+      await API.setMode(mode);
+    } catch (err) {
+      console.warn('Could not sync mode to device:', err);
+    }
   }
 
   function startTimer() {
@@ -40,15 +62,16 @@ const Recorder = (() => {
   }
 
   function startMeterSimulation() {
-    // Simulate meter activity — replace with real VU data when available
     meterInterval = setInterval(() => {
       if (!recording) return;
       const g = Math.random() * 70 + 10;
-      const v = Math.random() * 50 + 5;
       meterGuitar().style.width = g + '%';
-      meterVocal().style.width = v + '%';
       meterGuitar().classList.toggle('clipping', g > 90);
-      meterVocal().classList.toggle('clipping', v > 90);
+      if (currentMode === 'stereo') {
+        const v = Math.random() * 50 + 5;
+        meterVocal().style.width = v + '%';
+        meterVocal().classList.toggle('clipping', v > 90);
+      }
     }, 100);
   }
 
@@ -63,7 +86,7 @@ const Recorder = (() => {
 
   async function startRecording() {
     try {
-      const res = await API.recordStart();
+      const res = await API.recordStart(currentMode);
       currentSession = res.session;
       recording = true;
       btn().classList.add('recording');
@@ -78,18 +101,13 @@ const Recorder = (() => {
 
   async function stopRecording() {
     try {
-      const res = await API.recordStop();
+      await API.recordStop();
       recording = false;
       btn().classList.remove('recording');
       hint().textContent = 'tap to record';
       stopTimer();
       stopMeterSimulation();
-
-      // Show last capture after a short delay for file processing
-      setTimeout(() => {
-        Library.loadLastCapture();
-      }, 2000);
-
+      setTimeout(() => { Library.loadLastCapture(); }, 2000);
     } catch (err) {
       console.error('Failed to stop recording:', err);
     }
@@ -104,8 +122,6 @@ const Recorder = (() => {
   }
 
   function initShutterListener() {
-    // Bluetooth shutter buttons send keyboard events
-    // Most common keycodes: VolumeUp (Android), space bar, or Enter
     document.addEventListener('keydown', (e) => {
       const shutterKeys = ['VolumeUp', ' ', 'Enter', 'F9'];
       if (shutterKeys.includes(e.key)) {
@@ -113,20 +129,37 @@ const Recorder = (() => {
         toggle();
       }
     });
-
-    // Also listen for the PWA shortcut URL param
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'record') {
       startRecording();
     }
   }
 
+  function initModeToggle() {
+    const toggle = modeToggle();
+    if (!toggle) return;
+
+    // Load mode from device on init
+    API.getMode().then(res => {
+      currentMode = res.mode || 'stereo';
+      updateModeUI();
+    }).catch(() => {
+      updateModeUI();
+    });
+
+    toggle.addEventListener('change', () => {
+      setMode(toggle.checked ? 'stereo' : 'guitar_only');
+    });
+  }
+
   function init() {
     btn().addEventListener('click', toggle);
     initShutterListener();
+    initModeToggle();
+    updateModeUI();
   }
 
-  return { init, toggle, startRecording, stopRecording, isRecording: () => recording };
+  return { init, toggle, startRecording, stopRecording, isRecording: () => recording, getMode: () => currentMode };
 
 })();
 
