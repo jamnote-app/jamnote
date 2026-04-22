@@ -37,14 +37,16 @@ def load_config():
 class Recorder:
     """
     Manages audio capture from the USB interface.
-    Uses arecord for reliable low-latency stereo capture,
-    then splits channels into separate guitar and vocal WAV files.
+    Supports two modes:
+      - stereo: captures both guitar (ch1) and vocal (ch2), saves as separate files
+      - guitar_only: captures mono from ch1 only, no vocal file created
     """
 
     def __init__(self):
         self.config = load_config()
         self.recording = False
         self.current_session = None
+        self.current_mode = 'stereo'  # 'stereo' or 'guitar_only'
         self.recordings_dir = DEFAULT_RECORDINGS_DIR
         self.recordings_dir.mkdir(parents=True, exist_ok=True)
         self._process = None
@@ -53,6 +55,16 @@ class Recorder:
     @property
     def is_recording(self):
         return self.recording
+
+    def set_mode(self, mode):
+        """Set capture mode. Call before starting a recording."""
+        if mode not in ('stereo', 'guitar_only'):
+            raise ValueError(f'Invalid mode: {mode}')
+        if self.recording:
+            logger.warning('Cannot change mode while recording')
+            return
+        self.current_mode = mode
+        logger.info(f'Capture mode set to: {mode}')
 
     def _timestamp(self):
         """Generate a filesystem-safe timestamp string."""
@@ -70,32 +82,50 @@ class Recorder:
         """Path for the vocal channel WAV file."""
         return self.recordings_dir / f'{timestamp}-vocal.wav'
 
-    def start(self):
-        """Begin recording. Returns the session timestamp string."""
+    def start(self, mode=None):
+        """
+        Begin recording.
+        mode: 'stereo' or 'guitar_only' — overrides current_mode if provided.
+        Returns the session timestamp string.
+        """
         if self.recording:
             logger.warning('Already recording — ignoring start request')
             return self.current_session
+
+        if mode:
+            self.set_mode(mode)
 
         timestamp = self._timestamp()
         self.current_session = timestamp
         self.recording = True
 
-        stereo_file = self._stereo_path(timestamp)
         card = self.config.get('audio_card', 1)
         rate = self.config.get('sample_rate', 44100)
 
-        logger.info(f'Recording started — session {timestamp}')
+        logger.info(f'Recording started — session {timestamp} — mode: {self.current_mode}')
 
-        # Use arecord for reliable stereo capture
-        # S24_3LE = 24-bit packed, stereo, from USB interface
-        cmd = [
-            'arecord',
-            f'-D', f'hw:{card},0',
-            '-f', 'S24_3LE',
-            '-r', str(rate),
-            '-c', '2',
-            str(stereo_file)
-        ]
+        if self.current_mode == 'guitar_only':
+            # Mono capture from channel 1 only — write directly to guitar file
+            guitar_file = self.guitar_path(timestamp)
+            cmd = [
+                'arecord',
+                '-D', f'hw:{card},0',
+                '-f', 'S24_3LE',
+                '-r', str(rate),
+                '-c', '1',
+                str(guitar_file)
+            ]
+        else:
+            # Stereo capture — split into guitar + vocal after stopping
+            stereo_file = self._stereo_path(timestamp)
+            cmd = [
+                'arecord',
+                '-D', f'hw:{card},0',
+                '-f', 'S24_3LE',
+                '-r', str(rate),
+                '-c', '2',
+                str(stereo_file)
+            ]
 
         self._process = subprocess.Popen(
             cmd,
@@ -107,14 +137,17 @@ class Recorder:
 
     def stop(self):
         """
-        Stop recording. Splits stereo file into separate
-        guitar and vocal WAV files. Returns session timestamp.
+        Stop recording.
+        In stereo mode: splits channels into guitar and vocal files.
+        In guitar_only mode: guitar file is already written, nothing to split.
+        Returns session timestamp.
         """
         if not self.recording:
             logger.warning('Not currently recording — ignoring stop request')
             return None
 
         timestamp = self.current_session
+        mode = self.current_mode
         self.recording = False
 
         if self._process:
@@ -122,15 +155,18 @@ class Recorder:
             self._process.wait()
             self._process = None
 
-        logger.info(f'Recording stopped — session {timestamp}')
+        logger.info(f'Recording stopped — session {timestamp} — mode: {mode}')
 
-        # Split channels in a background thread so API responds immediately
-        self._thread = threading.Thread(
-            target=self._split_channels,
-            args=(timestamp,),
-            daemon=True
-        )
-        self._thread.start()
+        if mode == 'stereo':
+            # Split channels in background thread so API responds immediately
+            self._thread = threading.Thread(
+                target=self._split_channels,
+                args=(timestamp,),
+                daemon=True
+            )
+            self._thread.start()
+        else:
+            logger.info(f'Guitar-only session {timestamp} ready — {self.guitar_path(timestamp).name}')
 
         self.current_session = None
         return timestamp
