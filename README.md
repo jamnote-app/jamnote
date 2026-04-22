@@ -2,7 +2,7 @@
 
 **You're playing. You find something. Tap to capture it. Keep playing.**
 
-JamNote is an open source, one-button audio sketch recorder for guitarist-songwriters. It runs on a Raspberry Pi connected to any class-compliant USB audio interface, captures guitar and vocal simultaneously to separate WAV files, and syncs everything to Google Drive automatically when WiFi is available. A lightweight PWA served from the device gives you a clean mobile interface — no app store, no subscriptions, no setup every time you want to record.
+JamNote is an open source, one-button audio sketch recorder for songwriter-guitarists. It runs on a Raspberry Pi connected to any class-compliant USB audio interface, captures guitar and vocal simultaneously to separate WAV files, and syncs everything to Google Drive automatically when WiFi is available. A lightweight PWA served from the device gives you a clean mobile interface — no app store, no subscriptions, no setup every time you want to record. From Google Drive your captures drop straight into any DAW — BandLab, GarageBand, Reaper, Ableton, Logic, Cakewalk, or anything else that reads WAV files.
 
 ---
 
@@ -30,6 +30,27 @@ A Raspberry Pi sits on your desk or pedalboard connected to your existing USB au
 - Passive Y-splitter ¼ inch cable (guitar to interface and amp simultaneously)
 
 **Estimated hardware cost (excluding interface you already own):** ~$50–60
+
+---
+
+## Works with any DAW
+
+JamNote is DAW agnostic. Captures sync automatically to Google Drive as separate guitar and vocal WAV tracks, ready to import into whatever you use to make music.
+
+| DAW | Platform | How to import |
+|-----|----------|--------------|
+| BandLab | Web / iOS / Android | Open project → Add Track → import from Google Drive |
+| GarageBand | iOS / Mac | Files app → Google Drive → share to GarageBand |
+| Reaper | Windows / Mac | Drag WAV files from Google Drive desktop app |
+| Ableton Live | Windows / Mac | Drag WAV files from Google Drive desktop app |
+| Logic Pro | Mac | Drag WAV files from Google Drive desktop app |
+| Cakewalk | Windows | Import audio from Google Drive desktop app |
+| Any other DAW | — | Download WAV from Google Drive, import as audio track |
+
+Because captures arrive as two separate files — one for guitar, one for vocal — they drop directly onto individual tracks in your project without any splitting or conversion needed.
+
+For users of Reaper and Cakewalk, a companion app is in development for Phase 6 that will allow JamNote to trigger DAW recording sessions directly, eliminating the import step entirely. See the roadmap for details.
+```
 
 ---
 
@@ -161,9 +182,9 @@ jamnote/
 
 ### MVP (current focus)
 - [x] Hardware validation and signal chain
-- [ ] Two-channel WAV capture on button trigger
-- [ ] Flask API with recording, library, and settings endpoints
-- [ ] PWA frontend — all screens
+- [x] Two-channel WAV capture on button trigger
+- [x] Flask API with recording, library, and settings endpoints
+- [x] PWA frontend — all screens
 - [ ] Google Drive sync via rclone
 - [ ] Bluetooth shutter button trigger via PWA
 - [ ] mDNS local discovery at jamnote.local
@@ -193,7 +214,12 @@ Please open an issue before starting significant work so we can discuss approach
 
 ## Philosophy
 
-JamNote is deliberately minimal. It does one thing — capture the moment — and tries to do it without friction. Feature requests that add complexity to the core capture workflow will be considered carefully. The best version of this tool is the one you forget is there until you need it.
+JamNote does one thing — capture the moment — and tries to do it without friction. The best version of this tool is the one you forget is there until you need it.
+
+It is deliberately DAW agnostic and platform neutral. The capture layer runs on any Raspberry Pi with any class-compliant USB audio interface. The sync layer uses Google Drive, which every major DAW workflow can reach. The companion app layer, when it arrives, will add direct integration for specific DAWs without changing anything about how the core device works.
+
+Feature requests that add complexity to the core capture workflow will be considered carefully. Requests that extend compatibility with new DAWs, interfaces, or platforms are always welcome.
+```
 
 ---
 
